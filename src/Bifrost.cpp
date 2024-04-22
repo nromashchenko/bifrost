@@ -121,7 +121,7 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:r:q:g:I:C:T:o:t:k:m:e:B:l:w:aidvcyfbnNpP";
+    const char* opt_string = "s:r:q:g:I:C:T:o:t:k:m:e:B:l:w:E:F:aidvcyfbnNpP";
 
     static struct option long_options[] = {
 
@@ -131,6 +131,8 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
         {"input-graph-file",    required_argument,  0, 'g'},
         {"input-index-file",    required_argument,  0, 'I'},
         {"input-color-file",    required_argument,  0, 'C'},
+        {"input-tree-file",     no_argument,        0, 'E'},
+        {"input-feature-file",  no_argument,        0, 'F'},
         {"tmp-dir",             required_argument,  0, 'T'},        
         {"output-file",         required_argument,  0, 'o'},
         {"threads",             required_argument,  0, 't'},
@@ -158,10 +160,11 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
     else if (strcmp(argv[1], "--help") == 0) return 2; // print help
 
     if (strcmp(argv[1], "build") == 0) opt.build = true;
+    else if (strcmp(argv[1], "filter") == 0) opt.filter = true;
     else if (strcmp(argv[1], "update") == 0) opt.update = true;
     else if (strcmp(argv[1], "query") == 0) opt.query = true;
 
-    if (opt.build || opt.update || opt.query){
+    if (opt.build || opt.update || opt.query || opt.filter){
 
         while ((c = getopt_long(argc, argv, opt_string, long_options, &option_index)) != -1) {
 
@@ -211,6 +214,12 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
                     break;
                 case 'l':
                     opt.inFilenameBBF = optarg;
+                    break;
+                case 'E':
+                    opt.tree_in = optarg;
+                    break;
+                case 'F':
+                    opt.feature_tsv = optarg;
                     break;
                 case 'a':
                     opt.inexact_search = true;
@@ -336,7 +345,7 @@ bool check_ProgramOptions(CCDBG_Build_opt& opt) {
 
     // Check general parameters
 
-    if (!opt.build && !opt.update && !opt.query){
+    if (!opt.build && !opt.update && !opt.query && !opt.filter){
 
         cerr << "Error: No command selected (can be 'build' or 'update' or 'query')." << endl;
         ret = false;
@@ -420,6 +429,13 @@ bool check_ProgramOptions(CCDBG_Build_opt& opt) {
         if (opt.g > opt.k - 2){
 
             cerr << "Error: Length m of minimizers cannot exceed k - 2 (" << (opt.k - 2) << ")." << endl;
+            ret = false;
+        }
+    }
+    else if (opt.filter)
+    {
+        if (opt.prefixFilenameOut.empty()) {
+            cerr << "Error: No output filename prefix given." << endl;
             ret = false;
         }
     }
@@ -639,6 +655,24 @@ int main(int argc, char **argv){
 
                     if (success) success = cdbg.simplify(opt.deleteIsolated, opt.clipTips, opt.verbose);
                     if (success) success = cdbg.write(opt.prefixFilenameOut, opt.nb_threads, opt.outputGFA, opt.outputFASTA, opt.outputBFG, opt.writeIndexFile, opt.compressOutput, opt.verbose);
+                }
+            }
+            else if (opt.filter){
+
+                ColoredCDBG<> ccdbg(opt.k, opt.g);
+
+                if (opt.filename_index_in.empty())
+                {
+                    success = ccdbg.read(opt.filename_graph_in, opt.filename_colors_in, opt.nb_threads, opt.verbose);
+                }
+                else
+                {
+                    success = ccdbg.read(opt.filename_graph_in, opt.filename_index_in, opt.filename_colors_in, opt.nb_threads, opt.verbose);
+                }
+
+                if (success)
+                {
+                    success = ccdbg.filter(opt.filename_graph_in, opt.filename_colors_in, opt.tree_in, opt.feature_tsv, opt.prefixFilenameOut, opt.nb_threads, opt.verbose);
                 }
             }
             else if (opt.update){

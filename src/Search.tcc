@@ -67,7 +67,8 @@ vector<pair<size_t, UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence(   cons
                     l_pos_seq -= (ins_mask & shift_pos_seq);
                     l_pos_seq += (del_mask & shift_pos_seq);
 
-                    if ((l_pos_seq + k_1 < s_len) && us_pos_km.insert({l_pos_seq, um.getMappedKmer(j)}).second) v_um.push_back({l_pos_seq, um.getKmerMapping(j)});
+                    if ((l_pos_seq + k_1 < s_len) && us_pos_km.insert({l_pos_seq, um.getMappedKmer(j)}).second)
+                        v_um.push_back({l_pos_seq, um.getKmerMapping(j)});
                 }
             }
             else {
@@ -81,7 +82,8 @@ vector<pair<size_t, UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence(   cons
                     l_pos_seq -= (ins_mask & shift_pos_seq);
                     l_pos_seq += (del_mask & shift_pos_seq);
 
-                    if ((l_pos_seq + k_1 < s_len) && us_pos_km.insert({l_pos_seq, um.getMappedKmer(j)}).second) v_um.push_back({l_pos_seq, um.getKmerMapping(j)});
+                    if ((l_pos_seq + k_1 < s_len) && us_pos_km.insert({l_pos_seq, um.getMappedKmer(j)}).second)
+                        v_um.push_back({l_pos_seq, um.getKmerMapping(j)});
                 }
             }
         };
@@ -90,7 +92,8 @@ vector<pair<size_t, UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence(   cons
 
             if (ins) {
 
-                for (size_t j = shift; j < s_inexact_len; j += k_) s_inexact[j] = alpha[i];
+                for (size_t j = shift; j < s_inexact_len; j += k_)
+                    s_inexact[j] = alpha[i];
             }
             else if (subst) {
 
@@ -172,11 +175,13 @@ vector<pair<size_t, UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence(   cons
 
                 if (um.strand){
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
                 }
                 else {
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
                 }
 
                 ki_s += um.len - 1;
@@ -443,11 +448,13 @@ vector<pair<size_t, UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence(   cons
 
                 if (um.strand){
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
                 }
                 else {
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
                 }
 
                 if (v_um.size() >= nb_km_min) return v_um;
@@ -693,11 +700,13 @@ vector<pair<size_t, const_UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence( 
 
                 if (um.strand){
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
                 }
                 else {
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
                 }
 
                 ki_s += um.len - 1;
@@ -964,11 +973,13 @@ vector<pair<size_t, const_UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence( 
 
                 if (um.strand){
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + j - um.dist, um.getKmerMapping(j)});
                 }
                 else {
 
-                    for (size_t j = um.dist; j < um.dist + um.len; ++j) v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
+                    for (size_t j = um.dist; j < um.dist + um.len; ++j)
+                        v_um.push_back({pos_s + um.dist + um.len - j - 1, um.getKmerMapping(j)});
                 }
 
                 if (v_um.size() >= nb_km_min) return v_um;

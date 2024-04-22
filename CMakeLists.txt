@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Bifrost C CXX)
 find_package(Threads REQUIRED)
 
+SET(CMAKE_PREFIX_PATH "/home/nikolai/opt")
+
+find_package(sapling REQUIRED)
+
 # To enable a larger default k-mer size, replace MAX_KMER_SIZE with a larger multiple of 32: actual maximum k-mer size will be MAX_KMER_SIZE-1.
 SET(MAX_KMER_SIZE "32" CACHE STRING "MAX_KMER_SIZE")
 SET(MAX_GMER_SIZE "${MAX_KMER_SIZE}" CACHE STRING "MAX_GMER_SIZE")
@@ -12,8 +16,8 @@ SET(COMPILATION_ARCH "native" CACHE STRING "COMPILATION_ARCH")
 SET(ENABLE_AVX2 "ON" CACHE STRING "ENABLE_AVX2")
 
 # Set some default compile flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c17")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 set(CMAKE_MACOSX_RPATH 1)
 

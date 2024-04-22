@@ -147,6 +147,10 @@ struct CDBG_Build_opt {
     int k, g;
 
     bool build;
+
+    // NR: filter the unitigs by a color mask to find monophyletic unitig groups
+    bool filter;
+
     bool update;
     bool query;
 
@@ -164,7 +168,6 @@ struct CDBG_Build_opt {
     bool get_nb_found_km;
     bool get_ratio_found_km;
 
-
     bool writeIndexFile;
 
     double ratio_kmers;
@@ -174,6 +177,9 @@ struct CDBG_Build_opt {
 
     string filename_graph_in;
     string filename_index_in;
+
+    string tree_in;
+    string feature_tsv;
 
     vector<string> filename_query_in;
 

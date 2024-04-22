@@ -275,6 +275,9 @@ class ColoredCDBG : public CompactedDBG<DataAccessor<Unitig_data_t>, DataStorage
         */
         bool read(const string& input_graph_fn, const string& input_index_fn, const string& input_colors_fn, const size_t nb_threads = 1, const bool verbose = false);
 
+
+        bool filter(const string& input_graph_fn, const string& input_colors_fn, const string& tree_fn, const string& feature_fn, const string& prefixFilenameOut, size_t nb_threads=1, bool verbose=false);
+
         /** Merge a colored and compacted de Bruijn graph.
         * After merging, all unitigs and colors of the input graph have been added to and compacted with the current
         * colored and compacted de Bruijn graph (this). If the unitigs of the input graph had data of type "MyUnitigData"

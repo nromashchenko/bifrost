@@ -1,6 +1,8 @@
 #ifndef BIFROST_COLOREDCDBG_TCC
 #define BIFROST_COLOREDCDBG_TCC
 
+#include <sapling/sapling.h>
+
 template<typename U>
 ColoredCDBG<U>::ColoredCDBG(int kmer_length, int minimizer_length) : CompactedDBG<DataAccessor<U>, DataStorage<U>>(kmer_length, minimizer_length){
 
@@ -717,6 +719,120 @@ bool ColoredCDBG<U>::read(const string& input_graph_fn, const string& input_inde
     }
 
     return valid_input_files;
+}
+
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+#include <string>
+
+std::unordered_map<int, bool> tsv_to_binary_map(const std::string& filename)
+{
+    std::unordered_map<int, bool> data;
+    std::ifstream file(filename);
+    std::string line;
+
+    // skip the header
+    std::getline(file, line);
+
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+
+        std::string token;
+        std::getline(iss, token, '\t');
+        int id = std::stoi(token);
+
+        // skip the node name
+        std::getline(iss, token, '\t');
+
+        std::getline(iss, token, '\t');
+        int monophyletic = std::stoi(token);
+
+        data[id] = (monophyletic == 1);
+    }
+
+    return data;
+}
+
+
+template<typename U>
+bool ColoredCDBG<U>::filter(const string& input_graph_fn, const string& input_colors_fn, const string& tree_fn,  const string& feature_fn, const string& prefixFilenameOut, size_t nb_threads, bool verbose)
+{
+    namespace spl = sapling;
+    const auto num_unitigs = this->size();
+
+    /// NR: Read the feature map (postorder_node_id -> is_monophyletic)
+    const auto valid_nodes = tsv_to_binary_map(feature_fn);
+
+    if (verbose){
+        std::cout << "Making a colormap..." << std::endl;
+    }
+
+
+    std::vector<std::unordered_set<uint16_t>> unitig_colorset(num_unitigs);
+    size_t unitig_id = 0;
+    for (const auto& unitig : *this){
+        //std::cout << unitig.getUnitigHead().toString() << std::endl;
+        const auto data_storage = this->getData();
+        auto unitig_colors = data_storage->getUnitigColors(unitig);
+
+        size_t num_colors = 0;
+        auto it2 = unitig_colors->begin(unitig);
+        const auto end2 = unitig_colors->end();
+        for (; it2 != end2; ++it2){
+            const auto& [position, color] = *it2;
+            num_colors += 1;
+            unitig_colorset[unitig_id].insert(color);
+        }
+        unitig_id += 1;
+    }
+
+
+    if (verbose){
+        std::cout << "Finding LCAs..." << std::endl;
+    }
+
+    const auto tree = spl::load_newick(tree_fn);
+    std::vector<const spl::phylo_node*> lca_nodes;
+    std::vector<const spl::phylo_node*> tree_nodes;
+    for (size_t i = 0; i < num_unitigs; ++i){
+        for (const auto& color: unitig_colorset[i]){
+            tree_nodes.push_back(*tree.get_by_postorder_id(color));
+        }
+
+        lca_nodes.push_back(tree.lca(tree_nodes));
+        tree_nodes.clear();
+
+        if (verbose && (i % 100000 == 0)){
+            std::cout << i << " / " << num_unitigs << std::endl;
+        }
+    }
+
+    std::vector<bool> filter(num_unitigs);
+    for (size_t i = 0; i < num_unitigs; ++i){
+        const auto lca = lca_nodes[i];
+        filter[i] = valid_nodes.at(lca->get_postorder_id());
+    }
+
+    /// Save the filter to an output file
+    std::string output_filter_fn = feature_fn + ".filter";
+    size_t num_filtered_unitigs = 0;
+    std::ofstream out(output_filter_fn);
+    for (const auto to_keep : filter){
+        out << (to_keep ? 1 : 0) << " ";
+
+        if (to_keep){
+            num_filtered_unitigs += 1;
+        }
+    }
+
+    if (verbose){
+        std::cout << std::endl;
+        std::cout << "Filter saved to: " << output_filter_fn << std::endl;
+        std::cout << "# filtered unitigs: " << num_filtered_unitigs << " / " << num_unitigs << std::endl;
+    }
+
+    return true;
 }
 
 template<typename U>
@@ -1467,7 +1583,11 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
     const size_t nb_colors = getNbColors();
     const size_t sz_binary_color_query_out = nb_colors * l_query_res + 1;
 
-    auto processCounts = [&](const vector<pair<size_t, const_UnitigColorMap<U>>>& v_um, Roaring* color_occ_r, uint32_t* color_occ_u){
+    //const auto dumpfile = out_tmp + std::string("_dump");
+    //ofstream dump(dumpfile);
+    //std::cout << "Output: " << dumpfile << std::endl;
+
+    auto processCounts = [&](const vector<pair<size_t, const_UnitigColorMap<U>>>& v_um, Roaring* color_occ_r, uint32_t* color_occ_u, std::vector<size_t>& dump_color_occ){
 
         struct hash_pair {
 
@@ -1492,9 +1612,16 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
 
             size_t pos_query = p.first;
 
+            /// NR: the kmer position
+            //dump << "\tPosition: " << pos_query << std::endl;
+
             if (um.strand) {
 
                 const Kmer head = um.getUnitigHead();
+
+                //dump << "strand" << endl;
+
+                //dump << "Ref unitig it maps to: forward " << um.referenceUnitigToString() << std::endl;
 
                 size_t pos_unitig = um.dist;
 
@@ -1521,24 +1648,74 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
                     }
 
                     const UnitigColors* uc = um.getData()->getUnitigColors(um);
+                    const auto colors = um.getData()->getSubUnitigColorNames(um);
 
                     UnitigColors::const_iterator it_uc = uc->begin(um);
                     UnitigColors::const_iterator it_uc_end = uc->end();
 
+
+                    /// NR: This is wrong. UC iterates over colors, and for every color
+                    /// it iterates over all positions of the unitig (k-mers) that have this color.
+                    /// So this is an overestimation
+                    // dump << "\t#colors " << std::distance(uc->begin(um), uc->end()) << ": ";
+
+                    /*dump << "\tRef unitig colors: " << std::endl;
+                    for (const auto& color : colors)
+                    {
+                        dump << color << " ";
+                    }
+                    dump << std::endl;*/
+
+                    //dump << "\tColors: ";
+                    int previousColorID = -1;
+
                     if (inexact_search){
 
-                        for (; it_uc != it_uc_end; ++it_uc) color_occ_r[it_uc.getColorID()].add(it_uc.getKmerPosition() - um.dist + p.first);
+                        for (; it_uc != it_uc_end; ++it_uc)
+                        {
+                            const auto colorID = it_uc.getColorID();
+
+                            color_occ_r[colorID].add(it_uc.getKmerPosition() - um.dist + p.first);
+
+                            if (colorID != previousColorID)
+                            {
+                                //dump << colorID << " ";
+                                dump_color_occ[colorID] += 1;
+                            }
+                            previousColorID = (int)colorID;
+                        }
                     }
                     else {
 
-                        for (; it_uc != it_uc_end; ++it_uc) color_occ_u[it_uc.getColorID()] += 1;
+                        for (; it_uc != it_uc_end; ++it_uc)
+                        {
+                            const auto colorID = it_uc.getColorID();
+                            color_occ_u[colorID] += 1;
+
+                            if (colorID != previousColorID)
+                            {
+                                //dump << colorID;
+                                dump_color_occ[colorID] += 1;
+                            }
+                            //dump << ", ";
+                            previousColorID = (int)colorID;
+                        }
                     }
                 }
+                else
+                {
+                    //dump << "\terror: no colors for the unitig" << std::endl;
+                }
+                //dump << std::endl;
             }
             else {
 
                 const Kmer head = um.getUnitigTail().twin();
                 const size_t max_pos_um = um.dist + um.len - 1;
+
+                /// NR: the beginning of the unitig
+                //dump << "Ref unitig it maps to: reverse " << um.referenceUnitigToString() << std::endl;
+                //std::cout << "\t" << head.toString() << std::endl;;
 
                 it = s_um.find({pos_query, {head, um.dist}});
 
@@ -1567,29 +1744,73 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
                     UnitigColors::const_iterator it_uc = uc->begin(um);
                     UnitigColors::const_iterator it_uc_end = uc->end();
 
+                    // NR: the total number of colors the unitig covers
+                    //dump << "\tColors: ";
+
+                    int previousColorID = -1;
                     if (inexact_search){
 
-                        for (; it_uc != it_uc_end; ++it_uc) color_occ_r[it_uc.getColorID()].add(max_pos_um - it_uc.getKmerPosition() + p.first);
+
+                        for (; it_uc != it_uc_end; ++it_uc)
+                        {
+                            const auto colorID = it_uc.getColorID();
+                            const auto diff = max_pos_um - it_uc.getKmerPosition() + p.first;
+                            color_occ_r[colorID].add(diff);
+
+                            if (colorID != previousColorID)
+                            {
+                                //dump << colorID << " ";
+                                dump_color_occ[colorID] += 1;
+
+                            }
+                            previousColorID = (int)colorID;
+                        }
                     }
                     else {
 
-                        for (; it_uc != it_uc_end; ++it_uc) color_occ_u[it_uc.getColorID()] += 1;
+                        for (; it_uc != it_uc_end; ++it_uc)
+                        {
+                            const auto colorID = it_uc.getColorID();
+                            color_occ_u[colorID] += 1;
+
+                            if (colorID != previousColorID)
+                            {
+                                //dump << colorID << " ";
+                                dump_color_occ[colorID] += 1;
+                            }
+                            previousColorID = (int)colorID;
+                        }
                     }
                 }
+                //dump << std::endl;
             }
+
         }
 
         if (inexact_search){
 
-            for (size_t i = 0; i < nb_colors; ++i) color_occ_u[i] = color_occ_r[i].cardinality();
+            for (size_t i = 0; i < nb_colors; ++i)
+                color_occ_u[i] = color_occ_r[i].cardinality();
         }
     };
 
-    auto searchQuery = [&](const string& query, Roaring* color_occ_r, uint32_t* color_occ_u, const size_t nb_km_min){
+    auto searchQuery = [&](const string& query, Roaring* color_occ_r, uint32_t* color_occ_u, const size_t nb_km_min, std::vector<size_t>& dump_color_occs){
+
+
+        auto color_counts = std::vector<uint32_t>(nb_colors);
 
         const vector<pair<size_t, const_UnitigColorMap<U>>> v_um_e = this->searchSequence(query, true, false, false, false, false);
 
-        processCounts(v_um_e, color_occ_r, color_occ_u); // Extract k-mer occurrences for each color
+        //std::cout << "search " << query << std::endl;
+
+        //dump << "query: " << query << std::endl;
+
+        /*for (const auto& [kmer_pos, mapping] : v_um_e)
+        {
+            std:cout << kmer_pos << " " << mapping.referenceUnitigToString() << std::endl;
+        }*/
+
+        processCounts(v_um_e, color_occ_r, color_occ_u, dump_color_occs); // Extract k-mer occurrences for each color
 
         if (inexact_search){
 
@@ -1597,31 +1818,46 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
 
             for (size_t j = 0; j < nb_colors; ++j) nb_color_pres += (color_occ_u[j] >= nb_km_min);
 
-            if (nb_color_pres == nb_colors) return;
+            if (nb_color_pres == nb_colors)
+            {
+                return;
+            }
 
             const vector<pair<size_t, const_UnitigColorMap<U>>> v_um_d = this->searchSequence(query, false, false, true, false, false);
 
-            processCounts(v_um_d, color_occ_r, color_occ_u); // Extract k-mer occurrences for each color
+            processCounts(v_um_d, color_occ_r, color_occ_u, dump_color_occs); // Extract k-mer occurrences for each color
 
             nb_color_pres = 0;
 
-            for (size_t j = 0; j < nb_colors; ++j) nb_color_pres += (color_occ_u[j] >= nb_km_min);
+            for (size_t j = 0; j < nb_colors; ++j)
+            {
+                nb_color_pres += (color_occ_u[j] >= nb_km_min);
+            }
 
-            if (nb_color_pres == nb_colors) return;
+            if (nb_color_pres == nb_colors)
+            {
+                return;
+            }
 
             const vector<pair<size_t, const_UnitigColorMap<U>>> v_um_m = this->searchSequence(query, false, false, false, true, false);
 
-            processCounts(v_um_m, color_occ_r, color_occ_u); // Extract k-mer occurrences for each color
+            processCounts(v_um_m, color_occ_r, color_occ_u, dump_color_occs); // Extract k-mer occurrences for each color
 
             nb_color_pres = 0;
 
-            for (size_t j = 0; j < nb_colors; ++j) nb_color_pres += (color_occ_u[j] >= nb_km_min);
+            for (size_t j = 0; j < nb_colors; ++j)
+            {
+                nb_color_pres += (color_occ_u[j] >= nb_km_min);
+            }
 
-            if (nb_color_pres == nb_colors) return;
+            if (nb_color_pres == nb_colors)
+            {
+                return;
+            }
 
             const vector<pair<size_t, const_UnitigColorMap<U>>> v_um_i = this->searchSequence(query, false, true, false, false, false);
 
-            processCounts(v_um_i, color_occ_r, color_occ_u); // Extract k-mer occurrences for each color
+            processCounts(v_um_i, color_occ_r, color_occ_u, dump_color_occs); // Extract k-mer occurrences for each color
         }
     };
 
@@ -1814,6 +2050,12 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
         out << '\n';
     }
 
+    std::vector<std::vector<size_t>> dump_color_vectors;
+
+    const auto dumpfile = out_tmp + std::string("_dump");
+    ofstream dump(dumpfile);
+    std::cout << "Output: " << dumpfile << std::endl;
+
     if (nb_threads == 1){
 
         char* buffer_res = new char[thread_seq_buf_sz];
@@ -1826,26 +2068,47 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
         size_t nb_queries_found = 0;
         size_t nb_queries_processed = 0;
 
+        size_t progress = 0;
+
         while (fp.read(s, file_id)){
+
+            if (progress % 1000 == 0)
+            {
+                std::cout << "Read " << progress << " sequences" << std::endl;
+            }
+            progress += 1;
 
             const size_t nb_km_query = s.length() - k + 1;
             const char* query_name = fp.getNameString();
 
             for (auto& c : s) c &= 0xDF;
 
+            dump_color_vectors.push_back(std::vector<size_t>(nb_colors));
+            auto& last_color_vector = dump_color_vectors.back();
+
             if (get_nb_found_km || get_ratio_found_km){
 
-                searchQuery(s, color_occ_r, color_occ_u, nb_km_query);
+                searchQuery(s, color_occ_r, color_occ_u, nb_km_query, last_color_vector);
                 writeOutQuant(query_name, strlen(query_name), nb_km_query, color_occ_u, buffer_res, pos_buffer_out);
             }
             else {
 
                 const size_t nb_km_min = max(static_cast<size_t>(1), static_cast<size_t>(round(static_cast<double>(nb_km_query) * ratio_kmers)));
 
-                searchQuery(s, color_occ_r, color_occ_u, nb_km_min);
+                searchQuery(s, color_occ_r, color_occ_u, nb_km_min, last_color_vector);
 
                 nb_queries_found += static_cast<size_t>(writeOutBinary(query_name, strlen(query_name), color_occ_u, buffer_res, pos_buffer_out, nb_km_min));
             }
+
+            dump << s.size() << ": ";
+            int count_sum = 0;
+            for (auto count: last_color_vector)
+            {
+                dump << count << " ";
+                count_sum += count;
+            }
+            //dump << "; " << count_sum << std::endl;
+            dump << std::endl;
 
             std::memset(color_occ_u, 0, nb_colors * sizeof(uint32_t));
 
@@ -1941,21 +2204,32 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
 
                             for (auto& c : buffers_seq[i]) c &= 0xDF;
 
+                            // NR: don't bother with the parallel version, just make a whatever vector
+                            // to be able to call searchQuery
+                            std::vector<size_t> last_color_vector(nb_colors);
+
                             if (get_nb_found_km){
 
-                                searchQuery(buffers_seq[i], color_occ_r, color_occ_u, nb_km_query);
+                                searchQuery(buffers_seq[i], color_occ_r, color_occ_u, nb_km_query, last_color_vector);
                                 writeOutQuantMutex(buffers_name[i].c_str(), buffers_name[i].length(), nb_km_query, color_occ_u, buffer_res, pos_buffer_out, mutex_file_out);
                             }
                             else {
 
                                 const size_t nb_km_min = max(static_cast<size_t>(1), static_cast<size_t>(round(static_cast<double>(nb_km_query) * ratio_kmers)));
 
-                                searchQuery(buffers_seq[i], color_occ_r, color_occ_u, nb_km_min);
+                                searchQuery(buffers_seq[i], color_occ_r, color_occ_u, nb_km_min, last_color_vector);
 
                                 const bool is_found = writeOutBinaryMutex(buffers_name[i].c_str(), buffers_name[i].length(), color_occ_u, buffer_res, pos_buffer_out, nb_km_min, mutex_file_out);
 
                                 l_nb_queries_found += static_cast<size_t>(is_found);
                             }
+
+                            dump << buffers_seq[i].size() << ": ";
+                            for (auto count: last_color_vector)
+                            {
+                                dump << count << " ";
+                            }
+                            dump << std::endl;
 
                             std::memset(color_occ_u, 0, nb_colors * sizeof(uint32_t));
 

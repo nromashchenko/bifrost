@@ -25,6 +25,10 @@ find_package(ZLIB REQUIRED)
 target_link_libraries(bifrost_static ${ZLIB_LIBRARIES})
 target_link_libraries(bifrost_dynamic ${ZLIB_LIBRARIES})
 
+find_package(sapling REQUIRED)
+target_link_libraries(bifrost_static sapling::sapling)
+target_link_libraries(bifrost_dynamic sapling::sapling)
+
 if (ZLIB_FOUND)
     include_directories(${ZLIB_INCLUDE_DIRS})
 else()
