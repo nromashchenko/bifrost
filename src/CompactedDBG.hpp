@@ -181,6 +181,8 @@ struct CDBG_Build_opt {
     string tree_in;
     string feature_tsv;
 
+    string filter_in;
+
     vector<string> filename_query_in;
 
     CDBG_Build_opt() :  nb_threads(1), k(DEFAULT_K), g(-1), nb_bits_kmers_bf(24), ratio_kmers(0.8), min_count_km(1),
@@ -824,6 +826,10 @@ class CompactedDBG {
         vector<Unitig<U>*> v_unitigs;
         KmerCovIndex<U> km_unitigs;
         h_kmers_ccov_t h_kmers_ccov;
+
+        unordered_map<Unitig<U>*, size_t> v_unitig_ids;
+        unordered_map<Kmer, size_t> km_unitig_ids;
+        //unordered_map<const Kmer*, size_t> h_kmer_ids;
 
         MinimizerIndex hmap_min_unitigs;
 

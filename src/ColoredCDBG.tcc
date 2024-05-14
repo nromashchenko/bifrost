@@ -768,8 +768,8 @@ bool ColoredCDBG<U>::filter(const string& input_graph_fn, const string& input_co
         std::cout << "Making a colormap..." << std::endl;
     }
 
-
     std::vector<std::unordered_set<uint16_t>> unitig_colorset(num_unitigs);
+    std::vector<size_t> lengths(num_unitigs);
     size_t unitig_id = 0;
     for (const auto& unitig : *this){
         //std::cout << unitig.getUnitigHead().toString() << std::endl;
@@ -784,6 +784,7 @@ bool ColoredCDBG<U>::filter(const string& input_graph_fn, const string& input_co
             num_colors += 1;
             unitig_colorset[unitig_id].insert(color);
         }
+        lengths[unitig_id] = unitig.size;
         unitig_id += 1;
     }
 
@@ -809,9 +810,11 @@ bool ColoredCDBG<U>::filter(const string& input_graph_fn, const string& input_co
     }
 
     std::vector<bool> filter(num_unitigs);
+    std::vector<size_t> depth(num_unitigs);
     for (size_t i = 0; i < num_unitigs; ++i){
         const auto lca = lca_nodes[i];
         filter[i] = valid_nodes.at(lca->get_postorder_id());
+        depth[i] = lca->get_depth();
     }
 
     /// Save the filter to an output file
@@ -826,11 +829,21 @@ bool ColoredCDBG<U>::filter(const string& input_graph_fn, const string& input_co
         }
     }
 
-    if (verbose){
+    if (verbose) {
+        const auto outfile = output_filter_fn + std::string(".stats");
+        ofstream out(outfile);
+        out << "depth;length;filtered" << std::endl;
+        for (size_t i = 0; i < num_unitigs; ++i) {
+            out << depth[i] << ";" << lengths[i] << ";" << (filter[i] ? 1 : 0) << std::endl;
+        }
+    }
+
+    //if (verbose){
         std::cout << std::endl;
         std::cout << "Filter saved to: " << output_filter_fn << std::endl;
         std::cout << "# filtered unitigs: " << num_filtered_unitigs << " / " << num_unitigs << std::endl;
-    }
+    //}
+
 
     return true;
 }
@@ -1501,7 +1514,7 @@ vector<string> ColoredCDBG<U>::getColorNames() const {
 }
 
 template<typename U>
-bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string& out_filename_prefix,
+bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string& out_filename_prefix, const string& filter_in,
                             const double ratio_kmers, const bool get_nb_found_km, const bool get_ratio_found_km,
                             const bool inexact_search, const size_t nb_threads, const bool verbose) const {
 
@@ -1555,6 +1568,31 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
         fclose(fp_tmp);
 
         if (std::remove(out_tmp.c_str()) != 0) cerr << "ColoredCDBG::search(): Could not remove temporary file " << out_tmp << endl;
+    }
+
+    // Load the optional filter file
+    std::vector<bool> filter;
+    if (!filter_in.empty()){
+        fp_tmp = fopen(filter_in.c_str(), "r");
+        if (fp_tmp == nullptr) {
+            cerr << "ColoredCDBG::search(): Could not open file " << filter_in << endl;
+            return false;
+        }
+
+        //if (verbose){
+            cout << "Reading the filter map..." << endl;
+        //}
+        std::ifstream file(filter_in, fstream::in);
+        char value;
+        while (file >> value){
+            if (value != ' '){
+                filter.push_back(value == '1');
+            }
+        }
+
+        //if (verbose){
+            cout << "Read " << filter.size() << " unitig filter values." << endl;
+        //}
     }
 
     if (verbose) cout << "ColoredCDBG::search(): Querying graph." << endl;
@@ -1615,13 +1653,18 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
             /// NR: the kmer position
             //dump << "\tPosition: " << pos_query << std::endl;
 
+            // NR: "Unitig position" is unitig ID
+            if (!filter.empty() && !filter[um.getUnitigPos()]) {
+                return;
+            }
+
             if (um.strand) {
 
                 const Kmer head = um.getUnitigHead();
 
                 //dump << "strand" << endl;
 
-                //dump << "Ref unitig it maps to: forward " << um.referenceUnitigToString() << std::endl;
+                //cout << "Ref unitig it maps to: forward " << um.referenceUnitigToString() << std::endl;
 
                 size_t pos_unitig = um.dist;
 
@@ -1658,13 +1701,6 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
                     /// it iterates over all positions of the unitig (k-mers) that have this color.
                     /// So this is an overestimation
                     // dump << "\t#colors " << std::distance(uc->begin(um), uc->end()) << ": ";
-
-                    /*dump << "\tRef unitig colors: " << std::endl;
-                    for (const auto& color : colors)
-                    {
-                        dump << color << " ";
-                    }
-                    dump << std::endl;*/
 
                     //dump << "\tColors: ";
                     int previousColorID = -1;
@@ -1768,6 +1804,7 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
                     }
                     else {
 
+                        size_t unitig_id = 0;
                         for (; it_uc != it_uc_end; ++it_uc)
                         {
                             const auto colorID = it_uc.getColorID();
@@ -2072,12 +2109,6 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
 
         while (fp.read(s, file_id)){
 
-            if (progress % 1000 == 0)
-            {
-                std::cout << "Read " << progress << " sequences" << std::endl;
-            }
-            progress += 1;
-
             const size_t nb_km_query = s.length() - k + 1;
             const char* query_name = fp.getNameString();
 
@@ -2118,6 +2149,12 @@ bool ColoredCDBG<U>::search(const vector<string>& query_filenames, const string&
             }
 
             ++nb_queries_processed;
+
+            progress += 1;
+            if (progress % 1000 == 0)
+            {
+                std::cout << "Read " << progress << " sequences" << std::endl;
+            }
         }
 
         // Flush unresult written to final output

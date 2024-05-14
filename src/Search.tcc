@@ -67,8 +67,10 @@ vector<pair<size_t, UnitigMap<U, G>>> CompactedDBG<U, G>::searchSequence(   cons
                     l_pos_seq -= (ins_mask & shift_pos_seq);
                     l_pos_seq += (del_mask & shift_pos_seq);
 
-                    if ((l_pos_seq + k_1 < s_len) && us_pos_km.insert({l_pos_seq, um.getMappedKmer(j)}).second)
+                    if ((l_pos_seq + k_1 < s_len) && us_pos_km.insert({l_pos_seq, um.getMappedKmer(j)}).second){
                         v_um.push_back({l_pos_seq, um.getKmerMapping(j)});
+                    }
+
                 }
             }
             else {

@@ -219,6 +219,18 @@ class Kmer {
         std::string getBinary() const;
 };
 
+namespace std {
+    // NR: Force std::hash to use Kmer::hash, so we can use
+    // kmers as hashable in standard containers
+    template<>
+    struct hash<Kmer> {
+        std::size_t operator()(const Kmer& obj) const {
+            return obj.hash();
+        }
+    };
+}
+
+
 
 struct KmerHash {
 

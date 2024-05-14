@@ -88,6 +88,7 @@ CompactedDBG<U, G>& CompactedDBG<U, G>::toDataGraph(CompactedDBG<void, void>&& o
 
             delete o.v_unitigs[i];
         }
+        //v_unitig_ids = std::move(o.v_unitig_ids);
     };
 
     if ((nb_threads == 1) || (v_unitigs.size() < 1024)) moveUnitigs(0, v_unitigs.size());
@@ -4877,8 +4878,14 @@ bool CompactedDBG<U, G>::addUnitig(const string& str_unitig, const size_t id_uni
         if (id_unitig == km_unitigs.size()) km_unitigs.push_back(km_rep);
         else km_unitigs.set(id_unitig, km_rep);
     }
-    else if (id_unitig == v_unitigs.size()) v_unitigs.push_back(new Unitig<U>(c_str)); //Push unitig to list of unitigs
-    else v_unitigs[id_unitig] = new Unitig<U>(c_str);
+    else if (id_unitig == v_unitigs.size()){
+        v_unitigs.push_back(new Unitig<U>(c_str)); //Push unitig to list of unitigs
+        v_unitig_ids[v_unitigs.back()] = id_unitig;
+    }
+    else {
+        v_unitigs[id_unitig] = new Unitig<U>(c_str);
+        v_unitig_ids[v_unitigs[id_unitig]] = id_unitig;
+    }
 
     return isAbundant;
 }
@@ -5303,8 +5310,14 @@ bool CompactedDBG<U, G>::addUnitig(const string& str_unitig, const size_t id_uni
         if (id_unitig == km_unitigs.size()) km_unitigs.push_back(km_rep);
         else km_unitigs.set(id_unitig, km_rep);
     }
-    else if (id_unitig == v_unitigs.size()) v_unitigs.push_back(new Unitig<U>(c_str)); //Push unitig to list of unitigs
-    else v_unitigs[id_unitig] = new Unitig<U>(c_str);
+    else if (id_unitig == v_unitigs.size()){
+        v_unitigs.push_back(new Unitig<U>(c_str)); //Push unitig to list of unitigs
+        v_unitig_ids[v_unitigs.back()] = id_unitig;
+    }
+    else{
+        v_unitigs[id_unitig] = new Unitig<U>(c_str);
+        v_unitig_ids[v_unitigs[id_unitig]] = id_unitig;
+    }
 
     return isAbundant;
 }

@@ -121,7 +121,7 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:r:q:g:I:C:T:o:t:k:m:e:B:l:w:E:F:aidvcyfbnNpP";
+    const char* opt_string = "s:r:q:g:I:C:T:o:t:k:m:e:B:l:w:E:F:X:aidvcyfbnNpP";
 
     static struct option long_options[] = {
 
@@ -133,6 +133,7 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
         {"input-color-file",    required_argument,  0, 'C'},
         {"input-tree-file",     no_argument,        0, 'E'},
         {"input-feature-file",  no_argument,        0, 'F'},
+        {"input-filter-file",   no_argument,        0, 'X'},
         {"tmp-dir",             required_argument,  0, 'T'},        
         {"output-file",         required_argument,  0, 'o'},
         {"threads",             required_argument,  0, 't'},
@@ -220,6 +221,9 @@ int parse_ProgramOptions(int argc, char **argv, CCDBG_Build_opt& opt) {
                     break;
                 case 'F':
                     opt.feature_tsv = optarg;
+                    break;
+                case 'X':
+                    opt.filter_in = optarg;
                     break;
                 case 'a':
                     opt.inexact_search = true;
@@ -756,7 +760,7 @@ int main(int argc, char **argv){
                     if (opt.filename_index_in.length() == 0) success = ccdbg.read(opt.filename_graph_in, opt.filename_colors_in, opt.nb_threads, opt.verbose);
                     else success = ccdbg.read(opt.filename_graph_in, opt.filename_index_in, opt.filename_colors_in, opt.nb_threads, opt.verbose);
 
-                    if (success) success = ccdbg.search(opt.filename_query_in, opt.prefixFilenameOut, opt.ratio_kmers, opt.get_nb_found_km, opt.get_ratio_found_km,
+                    if (success) success = ccdbg.search(opt.filename_query_in, opt.prefixFilenameOut, opt.filter_in, opt.ratio_kmers, opt.get_nb_found_km, opt.get_ratio_found_km,
                                                         opt.inexact_search, opt.nb_threads, opt.verbose);
                 }
                 else {

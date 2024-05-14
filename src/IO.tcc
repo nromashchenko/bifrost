@@ -387,7 +387,9 @@ bool CompactedDBG<U, G>::read(const string& input_graph_fn, const string& input_
 
     if (!invalid) {
 
-    	for (auto& unitig : *this) unitig.setFullCoverage();
+    	for (auto& unitig : *this) {
+            unitig.setFullCoverage();
+        }
 
     	invalid = !readBinaryIndex(input_index_fn, p_readSuccess_checksum.first);
     }
@@ -1274,6 +1276,7 @@ pair<uint64_t, bool> CompactedDBG<U, G>::readBinaryGraph(istream& in) {
                 unitig = new Unitig<U>(move(cs), move(cc));
 
                 v_unitigs.push_back(unitig);
+                v_unitig_ids[unitig] = i;
             }
         }
     }
@@ -1831,7 +1834,9 @@ void CompactedDBG<U, G>::makeGraphFromGFA(const string& fn, const size_t nb_thre
 
         while ((r.first != nullptr) || (r.second != nullptr)){
 
-            if (r.first != nullptr) addUnitig(r.first->seq, (r.first->seq.length() == k_) ? km_unitigs.size() : v_unitigs.size());
+            if (r.first != nullptr){
+                addUnitig(r.first->seq, (r.first->seq.length() == k_) ? km_unitigs.size() : v_unitigs.size());
+            }
 
             r = graph.read(graph_file_id, new_file_opened, true);
         }
@@ -2005,9 +2010,12 @@ pair<uint64_t, bool> CompactedDBG<U, G>::readGraphFromIndexFASTA(const string& g
                 Unitig<U>* unitig;
 
                 graph_checksum = cs.hash(graph_checksum);
+
                 unitig = new Unitig<U>(move(cs), move(cc));
 
                 v_unitigs.push_back(unitig);
+                v_unitig_ids[unitig] = i;
+
 	    	}
 	    	else read_success = false;
 
@@ -2119,7 +2127,8 @@ pair<uint64_t, bool> CompactedDBG<U, G>::readGraphFromIndexGFA(const string& gra
 	                unitig = new Unitig<U>(move(cs), move(cc));
 
 	                v_unitigs.push_back(unitig);
-            	}
+                    v_unitig_ids[unitig] = stoi(r.first->id);
+                }
             	else read_success = false;
 
 	    		++i;
@@ -2148,6 +2157,8 @@ pair<uint64_t, bool> CompactedDBG<U, G>::readGraphFromIndexGFA(const string& gra
 
 		    		graph_checksum = km.hash(graph_checksum);
 		    		read_success = km_unitigs.set(i, km);
+
+                    km_unitig_ids[km] = std::stoi(r.first->id);
 		    	}
 		    	else read_success = false;
 

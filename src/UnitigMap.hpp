@@ -251,6 +251,10 @@ class UnitigMap : public UnitigMapBase {
             return um;
         }
 
+        size_t getUnitigPos() const {
+            return pos_unitig;
+        }
+
         void setFullCoverage() const;
         void increaseCoverage() const;
         void decreaseCoverage() const;
